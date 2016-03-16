@@ -1,0 +1,110 @@
+Chroot setup
+============
+
+Objective: prepare a chroot jail of a 32bit "guest" system
+
+
+* install required packages
+
+sudo apt-get install debootstrap schroot
+
+* prepare location for chroot jail
+
+sudo mkdir -p /var/chroot/workbench_trusty32
+
+* fetch files system of debian based distribution
+
+sudo debootstrap --arch=i386 --foreign --variant=buildd trusty /var/chroot/workbench_trusty32/ http://archive.ubuntu.com/ubuntu/
+
+- different  arch (i386)
+- buildd tells what kind of setup debootstrap should do (see man page)
+- trusty is the release name of ubuntu
+- foreign goes hand in hand with the different architecture. I've seen it recommended in a couple of tutorials and it is alos mentioned in the man pages. You will see that there will be another step take with debootstrap
+
+sudo chroot /var/chroot/workbench_trusty32/ /debootstrap/debootstrap --second-stage
+
+- this is the second stage of the process mentioned above ("foreign")
+
+* checkpoint
+
+at this point you should already have a lot of files in the target directory
+
+$ ls /var/chroot/workbench_trusty32/
+bin  boot  debootstrap  dev  etc  home  lib  mnt  proc  root  run  sbin  sys  tmp  usr  var
+
+$ sudo du -sh /var/chroot/workbench_trusty32/
+284M	/var/chroot/workbench_trusty32/
+
+you can chroot into the directory (called a chroot jail), but you will notice that it is not truly functonal (when running a command like 'free', it says it is missing proc fs, it has no sources for package installation, it doesn't have any other user then root)
+
+* configure schroot
+
+- configuration file for schroot is /etc/schroot/schroot.conf. Add an entry for the newly created chroot jail. schroot, when configured correcly, will help you by mounting the required filesystems every time you use it to enter the chroot jail 
+
+- (man schroot, man schroot.conf)
+
+[wb]
+type=directory
+description=Ubuntu Trusty 32bits for workbench
+directory=/var/chroot/workbench_trusty32
+profile=wbenv
+personality=linux32
+root-users=catalin
+users=catalin
+
+- setup the schroot "profile", wbenv, mentioned in the above config. A profile is the sum of actions that schroot takes when you enter one of its configured chroots. These actions include mounting different file systems, copying files from host to guest and are configured by files in a location of type /etc/schroot/${profile}/. Default profile is "default". 
+
+- we are going to base our profile to the "desktop" one
+
+sudo cp -r /etc/schroot/desktop/ /etc/schroot/wbenv
+
+- edit nssdatabases
+
+/etc/schroot/wbenv/nssdatabases 
+# System databases to copy into the chroot from the host system.
+#
+# <database name>
+#passwd
+#shadow
+#group
+#gshadow
+services
+protocols
+networks
+hosts
+
+- edit fstab by commenting out the "/home" line
+
+/etc/schroot/wbenv/fstab
+
+* copy apt sources to chroot jail
+
+sudo cp sources.list.d/* /var/chroot/workbench_trusty32/etc/apt/sources.list.d/
+
+(considering you have ubuntu trusty apt repositories)
+
+* enter your chroot
+
+schroot -c wb -u root --directory="/"
+
+- we specify the directory to avoid an error of schroot trying to place you in "/home/USER", which doesn't exist yet
+- commands like "free" should work
+- also, "apt-get update" should be ok if the sources lists from the previous step are correct
+
+* add a user to the chroot env
+
+(wb) adduser cgheorghe
+
+* locale warnings
+
+locale-gen ro_....
+
+* copyfiles
+
+add for example /etc/bash.bashrc to "copyfiles"
+
+
+
+
+
+
